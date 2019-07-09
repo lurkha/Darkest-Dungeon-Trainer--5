@@ -1,0 +1,7 @@
+C:\Users\root\Documents\Visual Studio 2017\Projects\Dota2MemoryScaner\ClassLibrary1\bin\Debug\VAMemory.dll
+C:\Users\root\Documents\Visual Studio 2017\Projects\Dota2MemoryScaner\ClassLibrary1\obj\Debug\MemoryManager.csprojResolveAssemblyReference.cache
+C:\Users\root\Documents\Visual Studio 2017\Projects\Dota2MemoryScaner\ClassLibrary1\obj\Debug\MemoryManager.csproj.CoreCompileInputs.cache
+C:\Users\root\Documents\Visual Studio 2017\Projects\Dota2MemoryScaner\ClassLibrary1\bin\Debug\TrainerEngine.dll
+C:\Users\root\Documents\Visual Studio 2017\Projects\Dota2MemoryScaner\ClassLibrary1\bin\Debug\TrainerEngine.pdb
+C:\Users\root\Documents\Visual Studio 2017\Projects\Dota2MemoryScaner\ClassLibrary1\obj\Debug\TrainerEngine.dll
+C:\Users\root\Documents\Visual Studio 2017\Projects\Dota2MemoryScaner\ClassLibrary1\obj\Debug\TrainerEngine.pdb

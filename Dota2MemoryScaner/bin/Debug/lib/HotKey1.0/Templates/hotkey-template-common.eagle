@@ -1,0 +1,593 @@
+###############################################################################
+#
+# hotkey-template-common.eagle --
+#
+# Extensible Adaptable Generalized Logic Engine (Eagle)
+# Hot-Key Template Common Package
+#
+# Copyright (c) 2007-2012 by Joe Mistachkin.  All rights reserved.
+#
+# See the file "license.terms" for information on usage and redistribution of
+# this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# RCS: @(#) $Id: $
+#
+###############################################################################
+
+#
+# NOTE: Use our own namespace here because even though we do not directly
+#       support namespaces ourselves, we do not want to pollute the global
+#       namespace if this script actually ends up being evaluated in Tcl.
+#
+namespace eval ::Eagle {
+  #
+  # NOTE: The vast majority of the script code in this file will only work in
+  #       Eagle, not Tcl.
+  #
+  if {[isEagle]} then {
+    proc showConsole { {show ""} } {
+      #
+      # NOTE: This procedure is designed to show or hide the console window
+      #       associated with the current process, if any.  It is entirely
+      #       self-contained.
+      #
+      try {
+        set kernel32 [library load kernel32.dll]
+
+        set GetConsoleWindow [library declare \
+            -functionname GetConsoleWindow \
+            -returntype IntPtr -module $kernel32]
+
+        set user32 [library load user32.dll]
+
+        set IsWindowVisible [library declare \
+            -functionname IsWindowVisible \
+            -returntype Int32 -parametertypes \
+            [list IntPtr] -module $user32]
+
+        set SW_HIDE 0; set SW_SHOW 5
+
+        set ShowWindow [library declare \
+            -functionname ShowWindow \
+            -returntype Int32 -parametertypes \
+            [list IntPtr Int32] -module $user32]
+
+        set hWnd [library call -create -alias $GetConsoleWindow]
+
+        if {[$hWnd ToInt32] == 0} then {
+          return false
+        }
+
+        if {[string length $show] == 0} then {
+          #
+          # NOTE: In this case, toggle the existing window visibility.
+          #
+          set show [expr {![library call $IsWindowVisible $hWnd]}]
+        }
+
+        if {$show} then {
+          if {[library call $ShowWindow $hWnd $SW_SHOW]} then {
+            return false
+          }
+        } else {
+          if {![library call $ShowWindow $hWnd $SW_HIDE]} then {
+            return false
+          }
+        }
+
+        return $show
+      } finally {
+        if {[info exists ShowWindow]} then {
+          library undeclare $ShowWindow
+          unset ShowWindow
+        }
+
+        if {[info exists IsWindowVisible]} then {
+          library undeclare $IsWindowVisible
+          unset IsWindowVisible
+        }
+
+        if {[info exists GetConsoleWindow]} then {
+          library undeclare $GetConsoleWindow
+          unset GetConsoleWindow
+        }
+
+        if {[info exists user32]} then {
+          library unload $user32
+          unset user32
+        }
+
+        if {[info exists kernel32]} then {
+          library unload $kernel32
+          unset kernel32
+        }
+      }
+    }
+
+    #
+    # NOTE: This procedure is designed to prevent a window from being closed
+    #       via the system menu or its associated 'X' button.
+    #
+    proc preventWindowClose { hWnd } {
+      try {
+        set user32 [library load user32.dll]
+
+        set SC_CLOSE 0xF060; set MF_BYCOMMAND 0x0
+
+        set GetSystemMenu [library declare \
+            -functionname GetSystemMenu \
+            -returntype IntPtr -parametertypes \
+            [list IntPtr UInt32] -charset ansi \
+            -module $user32]
+
+        set DeleteMenu [library declare \
+            -functionname DeleteMenu \
+            -returntype Int32 -parametertypes \
+            [list IntPtr UInt32 UInt32] -charset \
+            ansi -module $user32]
+
+        set hMenu [library call -create -alias $GetSystemMenu $hWnd 0]
+
+        if {[$hMenu ToInt32] == 0} then {
+          return false
+        }
+
+        if {![library call $DeleteMenu $hMenu $SC_CLOSE $MF_BYCOMMAND]} then {
+          return false
+        }
+
+        return true
+      } finally {
+        if {[info exists DeleteMenu]} then {
+          library undeclare $DeleteMenu
+          unset DeleteMenu
+        }
+
+        if {[info exists GetSystemMenu]} then {
+          library undeclare $GetSystemMenu
+          unset GetSystemMenu
+        }
+
+        if {[info exists user32]} then {
+          library unload $user32
+          unset user32
+        }
+      }
+    }
+
+    #
+    # NOTE: This procedure is designed to prevent a console window matching
+    #       the specified title from being closed via the system menu or its
+    #       associated 'X' button.
+    #
+    proc preventConsoleClose { title } {
+      try {
+        set user32 [library load user32.dll]
+
+        set FindWindowEx [library declare \
+            -functionname FindWindowExA \
+            -returntype IntPtr -parametertypes \
+            [list IntPtr IntPtr String String] \
+            -charset ansi -module $user32]
+
+        set zero [object invoke -create IntPtr Zero]
+
+        set hWnd [library call -create -alias \
+            $FindWindowEx $zero $zero ConsoleWindowClass \
+            [expr {[string length $title] > 0 ? $title : "null"}]]
+
+        if {[$hWnd ToInt32] == 0} then {
+          return false
+        }
+
+        return [preventWindowClose $hWnd]
+      } finally {
+        if {[info exists DeleteMenu]} then {
+          library undeclare $DeleteMenu
+          unset DeleteMenu
+        }
+
+        if {[info exists GetSystemMenu]} then {
+          library undeclare $GetSystemMenu
+          unset GetSystemMenu
+        }
+
+        if {[info exists user32]} then {
+          library unload $user32
+          unset user32
+        }
+      }
+    }
+
+    proc areTemplateThreadsIsolated {} {
+      #
+      # HACK: For now, just assume that hot-key template threads should
+      #       always be isolated if the hot-key plugin was loaded into
+      #       the current interpreter in isolated mode.
+      #
+      set pluginFlags [getPluginFlags {^HotKey\.Enterprise, }]
+
+      if {[lsearch -exact -- $pluginFlags Isolated] != -1} then {
+        return true
+      }
+
+      return false
+    }
+
+    proc getTemplateThreads {} {
+      return [expr {[info exists ::hotkey_template_threads] ? \
+          $::hotkey_template_threads : [list]}]
+    }
+
+    proc clearTemplateThreads {} {
+      set ::hotkey_template_threads [list]
+    }
+
+    proc addTemplateThread { thread } {
+      lappend ::hotkey_template_threads $thread
+    }
+
+    proc removeTemplateThread { thread } {
+      if {[info exists ::hotkey_template_threads]} then {
+        set index [lsearch -exact $::hotkey_template_threads $thread]
+
+        if {$index != -1} then {
+          set ::hotkey_template_threads \
+              [lremove $::hotkey_template_threads $index]
+        }
+      }
+    }
+
+    proc createTemplateThread { varName } {
+      upvar 1 $varName result
+
+      set thread [object invoke -alias \
+          ScriptThread Create null InterfaceUse null null null null \
+          x 0 result]
+
+      if {[string length $thread] > 0} then {
+        addTemplateThread $thread
+
+        hotkey log [appendArgs \
+            "Started hot-key template thread \"" $thread \"]
+
+        #
+        # HACK: If hot-key template threads are supposed to load
+        #       their binary plugins (e.g. the hot-key plugin) in
+        #       isolated mode, attempt to enable that now.
+        #
+        if {[areTemplateThreadsIsolated]} then {
+          set code [$thread Send {
+            set pluginFlags [object invoke \
+                -flags +NonPublic Interpreter.GetActive PluginFlags]
+
+            object invoke -flags +NonPublic Interpreter.GetActive \
+                PluginFlags [combineFlags $pluginFlags Isolated]
+
+            unset pluginFlags
+          } result]
+
+          if {$code ne "Ok"} then {
+            error [getStringFromObjectHandle $result]
+          }
+        }
+
+        #
+        # HACK: Perform any extra interpreter initialization for
+        #       the newly created script thread here.  This allows
+        #       for things like "secure mode" to work properly for
+        #       hot-key templates.
+        #
+        if {[info exists ::hotkey_template_thread_extra]} then {
+          set code [$thread Send $::hotkey_template_thread_extra result]
+
+          if {$code ne "Ok"} then {
+            error [getStringFromObjectHandle $result]
+          }
+        }
+      } else {
+        hotkey log [appendArgs \
+            "Failed to start hot-key template thread \"" $thread \
+            "\", error: " [getStringFromObjectHandle $result]]
+
+        error [getStringFromObjectHandle $result]
+      }
+
+      return $thread
+    }
+
+    proc exitTemplateThread { thread } {
+      removeTemplateThread $thread
+
+      if {[catch {object dispose $thread} error] == 0} then {
+        hotkey log [appendArgs \
+            "Stopped hot-key template thread \"" $thread \"]
+      } else {
+        hotkey log [appendArgs \
+            "Failed to stop hot-key template thread\"" \
+            $thread "\", error: " $error]
+      }
+    }
+
+    proc cancelTemplateThreads {} {
+      set threads [getTemplateThreads]
+
+      if {[llength $threads] > 0} then {
+        foreach thread $threads {
+          if {[catch {
+            $thread Cancel UnwindAndNotify
+          } result] == 0 && $result} then {
+            hotkey log [appendArgs \
+                "Canceled hot-key template thread \"" $thread \"]
+          } else {
+            hotkey log [appendArgs \
+                "Failed to cancel hot-key template thread \"" \
+                $thread "\", error: " $result]
+          }
+        }
+        clearTemplateThreads
+      }
+
+      interp cancel -unwind -- {}; # NOTE: Cancels self.
+    }
+
+    proc getCommonStartMenuFolderPath {} {
+      set stringBuilder [object create -alias \
+          System.Text.StringBuilder 260]; # MAX_PATH
+
+      set IntPtrZero [object invoke -create IntPtr Zero]
+      set CSIDL_COMMON_STARTMENU 22
+      set SHGFP_TYPE_CURRENT 0
+
+      object invoke -flags +NonPublic \
+          Microsoft.Win32.Win32Native SHGetFolderPath \
+          $IntPtrZero $CSIDL_COMMON_STARTMENU $IntPtrZero \
+          $SHGFP_TYPE_CURRENT $stringBuilder
+
+      return [$stringBuilder ToString]
+    }
+
+    proc getStartMenuShortcutFileNames {} {
+      set result [list]
+
+      foreach directory [list \
+          [object invoke Environment GetFolderPath StartMenu] \
+          [getCommonStartMenuFolderPath]] {
+        #
+        # NOTE: Recursively search for all the LNK files in this
+        #       "Start Menu" directory, adding them to the list.
+        #
+        set pattern [file join $directory *.lnk]
+        eval lappend result [findFilesRecursive $pattern]
+      }
+
+      return $result
+    }
+
+    proc getShortcutTargetPathNames { fileNames {pattern ""} } {
+      set result [list]
+
+      foreach fileName $fileNames {
+        set targetPath [getShortcutTargetPath $fileName]
+
+        if {[string length $targetPath] > 0 && \
+            ([string length $pattern] == 0 || \
+            [string match -nocase $pattern $targetPath])} then {
+          lappend result $targetPath
+        }
+      }
+
+      return [lsort -nocase -unique $result]
+    }
+
+    proc getShortcutTargetPath { fileName } {
+      if {[string length $fileName] == 0 || \
+          [string tolower [file extension $fileName]] ne ".lnk" || \
+          ![file exists $fileName] || ![file isfile $fileName]} then {
+        #
+        # NOTE: The LNK file name does not exist or is invalid,
+        #       just return an empty string.
+        #
+        return ""
+      }
+
+      #
+      # NOTE: If the Windows Script Host Runtime Library cannot be
+      #       loaded for some reason, just return an empty string.
+      #
+      if {[catch {object load -import -declare -loadtype File [file join \
+          [hotkey directory] Interop.wshom.dll]}]} then {
+        return ""
+      }
+
+      set shell [object create -alias WshShellClass]
+      set shortcut [$shell -alias CreateShortcut $fileName]
+
+      return [$shortcut TargetPath]
+    }
+
+    proc filterApplicationFileNames { fileNames } {
+      #
+      # NOTE: Initially, no file names qualify for the final list.
+      #
+      set result [list]
+
+      #
+      # NOTE: Query various lists of "well-known" application executable
+      #       files from the Windows registry, etc.
+      #
+      set list1 [getClassesRootOpenWithLists]
+      set list2 [getClassesRootApplications]
+      set list3 [getWindowsExecutableAppPaths]
+
+      #
+      # NOTE: Process the list of executable files.
+      #
+      foreach fileName $fileNames {
+        #
+        # NOTE: All of our searches are based on the file name without
+        #       the directory; therefore, grab it.
+        #
+        set fileNameOnly [file tail $fileName]
+
+        #
+        # NOTE: Search for the file name within several lists of "known"
+        #       applications used by Windows.  If it present in any of
+        #       these lists, add it to the final list of file names for
+        #       the user to select from.
+        #
+        if {[lsearch -exact -nocase -index 0 $list1 $fileNameOnly] != -1 || \
+            [lsearch -exact -nocase $list2 $fileNameOnly] != -1 || \
+            [lsearch -exact -nocase -index 0 $list3 $fileNameOnly] != -1} then {
+          #
+          # NOTE: The file appears to be present in one of the "well-known"
+          #       lists of applications present in the Windows registry;
+          #       therefore, add it to the final list to be selected from
+          #       by the user.
+          #
+          lappend result $fileName
+        }
+      }
+
+      return $result
+    }
+
+    proc getClassesRootOpenWithLists {} {
+      set result [list]
+
+      foreach subKeyName [object invoke \
+          Microsoft.Win32.Registry.ClassesRoot GetSubKeyNames] {
+
+        try {
+          set subKey [object invoke -alias \
+              Microsoft.Win32.Registry.ClassesRoot OpenSubKey \
+              [appendArgs $subKeyName \\ OpenWithList]]
+
+          if {[string length $subKey] > 0} then {
+            foreach subSubKeyName [$subKey GetSubKeyNames] {
+              set index [lsearch -exact -nocase -index 0 $result \
+                  $subSubKeyName]
+
+              if {$index != -1} then {
+                lset result $index [eval lappendArgs \
+                    [lindex $result $index] [list $subKeyName]]
+              } else {
+                lappend result [list $subSubKeyName $subKeyName]
+              }
+            }
+          }
+        } finally {
+          unset -nocomplain subKey
+        }
+      }
+
+      return $result
+    }
+
+    proc getClassesRootApplications {} {
+      set result [list]
+
+      try {
+        set subKey [object invoke -alias \
+            Microsoft.Win32.Registry.ClassesRoot OpenSubKey Applications]
+
+        if {[string length $subKey] > 0} then {
+          foreach subKeyName [$subKey GetSubKeyNames] {
+            if {[string match -nocase *.exe $subKeyName]} then {
+              if {[lsearch -exact -nocase $result $subKeyName] == -1} then {
+                lappend result $subKeyName
+              }
+            }
+          }
+        }
+      } finally {
+        unset -nocomplain subKey
+      }
+
+      return $result
+    }
+
+    proc getWindowsExecutableAppPaths {} {
+      set result [list]
+
+      try {
+        set subKey [object invoke -alias \
+            Microsoft.Win32.Registry.LocalMachine OpenSubKey \
+            "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths"]
+
+        if {[string length $subKey] > 0} then {
+          foreach subKeyName [$subKey GetSubKeyNames] {
+            if {[string match -nocase *.exe $subKeyName]} then {
+              try {
+                set subSubKey [$subKey -alias OpenSubKey $subKeyName]
+
+                if {[string length $subSubKey] > 0} then {
+                  set path [$subSubKey GetValue Path]
+
+                  if {[string length $path] == 0} then {
+                    set path [$subSubKey GetValue null]
+                  }
+
+                  if {[string length $path] > 0} then {
+                    lappend result [list $subKeyName $path]
+                  }
+                }
+              } finally {
+                unset -nocomplain subSubKey
+              }
+            }
+          }
+        }
+      } finally {
+        unset -nocomplain subKey
+      }
+
+      return $result
+    }
+
+    proc getApplicationsFromAppPaths { appPaths } {
+      set result [list]
+
+      foreach appPath $appPaths {
+        set path [lindex $appPath 1]
+
+        if {[string length $path] > 0} then {
+          if {[file exists $path]} then {
+            if {[file isfile $path]} then {
+              set fileName $path
+            } elseif {[file isdirectory $path]} then {
+              set subKeyName [lindex $appPath 0]
+
+              if {[string length $subKeyName] > 0} then {
+                set fileName [file join $path $subKeyName]
+
+                if {![file exists $fileName] || \
+                    ![file isfile $fileName]} then {
+                  continue
+                }
+              } else {
+                continue
+              }
+            } else {
+              continue
+            }
+          } else {
+            continue
+          }
+        } else {
+          continue
+        }
+
+        lappend result [file nativename [file normalize $fileName]]
+      }
+
+      return $result
+    }
+  }
+
+  #
+  # NOTE: Provide the package to the interpreter.
+  #
+  package provide HotKey.Template.Common 1.0
+}
+

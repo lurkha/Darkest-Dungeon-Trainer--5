@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29001.49
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DDT", "Dota2MemoryScaner\DDT.csproj", "{9526266D-DAD8-4418-9D5E-A8D74743DFDB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MemoryManager", "ClassLibrary1\MemoryManager.csproj", "{250F8A19-1D8D-4CA7-BC08-8929C2BFC002}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9526266D-DAD8-4418-9D5E-A8D74743DFDB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9526266D-DAD8-4418-9D5E-A8D74743DFDB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9526266D-DAD8-4418-9D5E-A8D74743DFDB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9526266D-DAD8-4418-9D5E-A8D74743DFDB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{250F8A19-1D8D-4CA7-BC08-8929C2BFC002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{250F8A19-1D8D-4CA7-BC08-8929C2BFC002}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{250F8A19-1D8D-4CA7-BC08-8929C2BFC002}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{250F8A19-1D8D-4CA7-BC08-8929C2BFC002}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DAE5B331-F964-47F4-BDB4-40628C76C813}
+	EndGlobalSection
+EndGlobal

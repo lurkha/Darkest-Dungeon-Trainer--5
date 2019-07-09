@@ -1,0 +1,391 @@
+###############################################################################
+#
+# test.eagle --
+#
+# Extensible Adaptable Generalized Logic Engine (Eagle)
+# Harpy Testing Support Package
+#
+# Copyright (c) 2007-2012 by Joe Mistachkin.  All rights reserved.
+#
+# See the file "license.terms" for information on usage and redistribution of
+# this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# RCS: @(#) $Id: $
+#
+###############################################################################
+
+#
+# NOTE: Use our own namespace here because even though we do not directly
+#       support namespaces ourselves, we do not want to pollute the global
+#       namespace if this script actually ends up being evaluated in Tcl.
+#
+namespace eval ::Eagle {
+  proc isValidKeyRing { name } {
+    if {[string length $name] == 0} then {
+      return false
+    }
+
+    return true
+  }
+
+  proc saveKeyRing { varName } {
+    upvar 1 $varName savedKeyRing
+
+    set savedKeyRing(local) ""
+    catch {set savedKeyRing(local) [keyring save]}
+
+    return ""
+  }
+
+  proc resetKeyRing {} {
+    global testKeyName
+    global testPolicy
+
+    #
+    # NOTE: In order for the [keyring bootstrap] sub-command to work when
+    #       the test policy is active (which enforces key name matching),
+    #       the key name must be set to the trust root key name.
+    #
+    saveKeyName savedKeyName
+
+    if {[info exists testKeyName(2)]} then {
+      setKeyName $testKeyName(2)
+    } else {
+      resetKeyName
+    }
+
+    try {
+      #
+      # NOTE: In order for the [keyring bootstrap] sub-command to work
+      #       when the test policy is active, certain policy flags are
+      #       required.
+      #
+      savePolicy savedPolicy; resetPolicy
+
+      if {[info exists testPolicy(5)]} then {
+        certificate policy -file $testPolicy(5) -script $testPolicy(5)
+      } else {
+        certificate policy -enabled true
+      }
+
+      try {
+        keyring bootstrap
+      } finally {
+        restorePolicy savedPolicy
+      }
+    } finally {
+      restoreKeyName savedKeyName
+    }
+
+    return ""
+  }
+
+  proc restoreKeyRing { varName } {
+    upvar 1 $varName savedKeyRing
+
+    if {[info exists savedKeyRing(local)] && \
+        [isValidKeyRing $savedKeyRing(local)]} then {
+      keyring restore $savedKeyRing(local)
+    }
+
+    unset -nocomplain savedKeyRing(local)
+
+    if {[array size savedKeyRing] == 0} then {
+      unset -nocomplain savedKeyRing
+    }
+
+    return ""
+  }
+
+  proc isValidPolicy { policy } {
+    if {[string length $policy] == 0} then {
+      return false
+    }
+
+    if {$policy eq "None" || $policy eq "Undefined"} then {
+      return false
+    }
+
+    return true
+  }
+
+  proc savePolicy { varName } {
+    upvar 1 $varName savedPolicy
+
+    set savedPolicy(global) [certificate policy -local false]
+    set savedPolicy(local) [certificate policy -local true]
+
+    return ""
+  }
+
+  proc resetPolicy {} {
+    certificate policy -local false -enabled false -unset true
+    certificate policy -local true -enabled false -unset true
+
+    return ""
+  }
+
+  proc restorePolicy { varName } {
+    upvar 1 $varName savedPolicy
+
+    if {[info exists savedPolicy(local)]} then {
+      foreach {policyType policy} $savedPolicy(local) {
+        if {[isValidPolicy $policy]} then {
+          certificate policy -local true $policyType $policy
+        } else {
+          certificate policy -local true $policyType None -unset true
+        }
+      }
+    }
+
+    unset -nocomplain savedPolicy(local)
+
+    if {[info exists savedPolicy(global)]} then {
+      foreach {policyType policy} $savedPolicy(global) {
+        if {[isValidPolicy $policy]} then {
+          certificate policy -local false $policyType $policy
+        } else {
+          certificate policy -local false $policyType None -unset true
+        }
+      }
+    }
+
+    unset -nocomplain savedPolicy(global)
+
+    if {[array size savedPolicy] == 0} then {
+      unset -nocomplain savedPolicy
+    }
+
+    return ""
+  }
+
+  proc hasSecurity {} {
+    if {[catch {
+      object invoke -flags +NonPublic Interpreter.GetActive HasSecurity
+    } security] == 0} then {
+      return $security
+    }
+
+    return ""
+  }
+
+  proc saveSecurity { varName } {
+    set security [hasSecurity]
+
+    if {[string is boolean -strict $security]} then {
+      upvar 1 $varName savedSecurity
+
+      set savedSecurity(global) $security
+    }
+
+    return ""
+  }
+
+  proc resetSecurity {} {
+    catch {security false}
+
+    return ""
+  }
+
+  proc restoreSecurity { varName } {
+    upvar 1 $varName savedSecurity
+
+    if {[info exists savedSecurity(global)]} then {
+      set security [hasSecurity]
+
+      if {![string is boolean -strict $security] || \
+          $security != $savedSecurity(global)} then {
+        security $savedSecurity(global)
+      }
+    }
+
+    unset -nocomplain savedSecurity(global)
+
+    if {[array size savedSecurity] == 0} then {
+      unset -nocomplain savedSecurity
+    }
+
+    return ""
+  }
+
+  proc isValidKeyName { keyName } {
+    if {[string length $keyName] == 0} then {
+      return false
+    }
+
+    return true
+  }
+
+  proc saveKeyName { varName } {
+    upvar 1 $varName savedKeyName
+
+    set savedKeyName(global) [certificate keyname -local false]
+    set savedKeyName(local) [certificate keyname -local true]
+
+    return ""
+  }
+
+  proc setKeyName { keyName } {
+    certificate keyname -local false \
+        -file $keyName -script $keyName -stream $keyName
+
+    certificate keyname -local true \
+        -file $keyName -script $keyName -stream $keyName
+
+    return ""
+  }
+
+  proc resetKeyName {} {
+    certificate keyname -local false \
+        -script "" -file "" -stream "" -unset true
+
+    certificate keyname -local true \
+        -script "" -file "" -stream "" -unset true
+
+    return ""
+  }
+
+  proc restoreKeyName { varName } {
+    upvar 1 $varName savedKeyName
+
+    if {[info exists savedKeyName(local)]} then {
+      foreach {policyType keyName} $savedKeyName(local) {
+        if {[isValidKeyName $keyName]} then {
+          certificate keyname -local true $policyType $keyName
+        } else {
+          certificate keyname -local true $policyType "" -unset true
+        }
+      }
+    }
+
+    unset -nocomplain savedKeyName(local)
+
+    if {[info exists savedKeyName(global)]} then {
+      foreach {policyType keyName} $savedKeyName(global) {
+        if {[isValidKeyName $keyName]} then {
+          certificate keyname -local false $policyType $keyName
+        } else {
+          certificate keyname -local false $policyType "" -unset true
+        }
+      }
+    }
+
+    unset -nocomplain savedKeyName(global)
+
+    if {[array size savedKeyName] == 0} then {
+      unset -nocomplain savedKeyName
+    }
+
+    return ""
+  }
+
+  proc isValidScriptFlags { scriptFlags } {
+    if {[string length $scriptFlags] == 0} then {
+      return false
+    }
+
+    if {$scriptFlags eq "None"} then {
+      return false
+    }
+
+    return true
+  }
+
+  proc saveScriptFlags { varName } {
+    upvar 1 $varName savedScriptFlags
+
+    set savedScriptFlags(global) [certificate scriptflags -local false]
+    set savedScriptFlags(local) [certificate scriptflags -local true]
+
+    return ""
+  }
+
+  proc resetScriptFlags {} {
+    certificate scriptflags -local false \
+        -script None -file None -other None -stream None -unset true
+
+    certificate scriptflags -local true \
+        -script None -file None -other None -stream None -unset true
+
+    return ""
+  }
+
+  proc restoreScriptFlags { varName } {
+    upvar 1 $varName savedScriptFlags
+
+    if {[info exists savedScriptFlags(local)]} then {
+      foreach {policyType scriptFlags} $savedScriptFlags(local) {
+        if {[isValidScriptFlags $scriptFlags]} then {
+          certificate scriptflags -local true $policyType $scriptFlags
+        } else {
+          certificate scriptflags -local true $policyType None -unset true
+        }
+      }
+    }
+
+    unset -nocomplain savedScriptFlags(local)
+
+    if {[info exists savedScriptFlags(global)]} then {
+      foreach {policyType scriptFlags} $savedScriptFlags(global) {
+        if {[isValidScriptFlags $scriptFlags]} then {
+          certificate scriptflags -local false $policyType $scriptFlags
+        } else {
+          certificate scriptflags -local false $policyType None -unset true
+        }
+      }
+    }
+
+    unset -nocomplain savedScriptFlags(global)
+
+    if {[array size savedScriptFlags] == 0} then {
+      unset -nocomplain savedScriptFlags
+    }
+
+    return ""
+  }
+
+  proc dumpPolicySettings { channel } {
+    tputs $channel [appendArgs \
+        "---- local security is \"" [hasSecurity] \"\n]
+
+    tputs $channel [appendArgs \
+        "---- global policy is \"" \
+        [certificate policy -local false] \"\n]
+
+    tputs $channel [appendArgs \
+        "---- local policy is \"" \
+        [certificate policy -local true] \"\n]
+
+    tputs $channel [appendArgs \
+        "---- global key name is \"" \
+        [certificate keyname -local false] \"\n]
+
+    tputs $channel [appendArgs \
+        "---- local key name is \"" \
+        [certificate keyname -local true] \"\n]
+
+    tputs $channel [appendArgs \
+        "---- global script flags are \"" \
+        [certificate scriptflags -local false] \"\n]
+
+    tputs $channel [appendArgs \
+        "---- local script flags are \"" \
+        [certificate scriptflags -local true] \"\n]
+  }
+
+  proc publicKeyTokenToBytes { publicKeyToken } {
+    set result [list]
+
+    foreach {nibble1 nibble2} [split $publicKeyToken ""] {
+      lappend result [expr {[appendArgs 0x $nibble1 $nibble2] + 0}]
+    }
+
+    return $result
+  }
+
+  #
+  # NOTE: Provide the Harpy test package to the interpreter.
+  #
+  package provide Harpy.Test 1.0
+}
+
